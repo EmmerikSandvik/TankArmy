@@ -1,103 +1,205 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import AuthForm from '@/components/AuthForm'
+import Layout from '@/components/Layout'
+import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+type Workout = {
+  id: string
+  title: string
+  user_id: string
+  type: string
+  gps: string | null
+  created_at?: string
+}
+
+// Ny type for innsetting
+type NewWorkout = {
+  title: string
+  user_id: string
+  type: string
+  gps: string | null
+}
+
+export default function HomePage() {
+  const [user, setUser] = useState<User | null>(null)
+  const [workouts, setWorkouts] = useState<Workout[]>([])
+  const [title, setTitle] = useState('')
+  const [type, setType] = useState('løping')
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+        error
+      } = await supabase.auth.getSession()
+
+      if (error) {
+        console.error('Auth error:', error.message)
+        if (error.message.includes('Invalid Refresh Token')) {
+          await supabase.auth.signOut()
+          setUser(null)
+          return
+        }
+      }
+
+      setUser(session?.user ?? null)
+    }
+
+    checkSession()
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        setUser(session?.user ?? null)
+      }
+    )
+
+    return () => {
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+
+    const fetchWorkouts = async () => {
+      const { data, error } = await supabase
+        .from('workouts')
+        .select('*')
+        .returns<Workout[]>()
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Feil ved henting:', error.message || error)
+      } else {
+        setWorkouts(data || [])
+      }
+    }
+
+    fetchWorkouts()
+  }, [user])
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const cleanTitle = title.trim()
+    if (!cleanTitle || !user) return
+
+    const newWorkout: NewWorkout = {
+      title: cleanTitle,
+      user_id: user.id,
+      type,
+      gps: null
+    }
+
+    const { data, error } = await supabase
+      .from('workouts')
+      .insert([newWorkout])
+      .select()
+
+    if (error) {
+      console.error('Feil ved innsending:', error.message || error)
+    } else {
+      setWorkouts((prev) => [...(data || []), ...prev])
+      setTitle('')
+    }
+  }
+
+  if (!user) {
+    return (
+      <Layout>
+        <div
+          className="min-h-screen bg-cover bg-center flex items-center justify-center"
+          style={{ backgroundImage: "url('/assets/Rambo-First-Blood.webp')" }}
+        >
+          <div className="bg-white/80 p-6 rounded shadow">
+            <AuthForm />
+          </div>
         </div>
+      </Layout>
+    )
+  }
+
+  return (
+    <Layout>
+      <main className="p-4 max-w-xl mx-auto">
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut()
+            setUser(null)
+          }}
+          className="mb-4 text-sm text-red-700 underline"
+        >
+          Logg ut
+        </button>
+
+        <h1 className="text-2xl font-bold mb-4">Dine treningsøkter</h1>
+
+        <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-2">
+          <input
+            type="text"
+            placeholder="Navn på økt"
+            className="border px-3 py-2 rounded w-full"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="border px-3 py-2 rounded"
+          >
+            <option value="løping">🏃 Løping</option>
+            <option value="styrke">🏋️ Styrke</option>
+            <option value="boksing">🥊 Boksing</option>
+            <option value="annet">🧘 Annet</option>
+          </select>
+
+          <button
+            type="submit"
+            className="bg-green-600 text-white px-4 py-2 rounded"
+          >
+            Legg til
+          </button>
+        </form>
+
+        <ul className="space-y-2">
+          {workouts.map((w) => (
+            <li
+              key={w.id}
+              className="border bg-white px-3 py-2 rounded flex justify-between items-center"
+            >
+              <span className="font-bold text-black text-lg">
+                {w.type === 'løping' && '🏃 Løping: '}
+                {w.type === 'styrke' && '🏋️ Styrke: '}
+                {w.type === 'boksing' && '🥊 Boksing: '}
+                {w.type === 'annet' && '🧘 Annet: '}
+                {w.title}
+              </span>
+              <button
+                onClick={async () => {
+                  const { error } = await supabase
+                    .from('workouts')
+                    .delete()
+                    .eq('id', w.id)
+
+                  if (error) {
+                    console.error('Feil ved sletting:', error.message)
+                    return
+                  }
+
+                  setWorkouts((prev) => prev.filter((item) => item.id !== w.id))
+                }}
+                className="text-red-600 hover:text-red-800 text-sm"
+                aria-label={`Slett ${w.title}`}
+              >
+                🗑️
+              </button>
+            </li>
+          ))}
+        </ul>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+    </Layout>
+  )
 }
