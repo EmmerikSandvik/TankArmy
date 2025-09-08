@@ -17,10 +17,21 @@ type Workout = {
   created_at?: string
 }
 
+type Post = {
+  id: string
+  user_id: string
+  content: string
+  image_url: string | null
+  created_at: string
+}
+
 export default function Page() { // Viktig at det heter Page!
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+
   const [workouts, setWorkouts] = useState<Workout[]>([])
+  const [posts, setPosts] = useState<Post[]>([])
+
   const [stats, setStats] = useState({
     total: 0,
     week: 0,
@@ -57,12 +68,12 @@ export default function Page() { // Viktig at det heter Page!
     }
   }, [])
 
-  // === Hent økter + enkle stats ===
+  // === Hent økter + poster + enkle stats ===
   useEffect(() => {
     if (!user) return
 
     const fetchData = async () => {
-      // Siste 8 for feeden
+      // Siste 8 økter til feed
       const { data: recent, error: errRecent } = await supabase
         .from('workouts')
         .select('*')
@@ -72,13 +83,22 @@ export default function Page() { // Viktig at det heter Page!
 
       if (!errRecent) setWorkouts(recent || [])
 
-      // Total
+      // Siste 5 innlegg til feed
+      const { data: recentPosts, error: postsErr } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (!postsErr) setPosts((recentPosts ?? []) as Post[])
+
+      // Stats
       const { count: total } = await supabase
         .from('workouts')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
 
-      // Denne uka (7 dager)
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const { count: week } = await supabase
         .from('workouts')
@@ -86,7 +106,6 @@ export default function Page() { // Viktig at det heter Page!
         .eq('user_id', user.id)
         .gte('created_at', sevenDaysAgo)
 
-      // Per type (løping, styrke, annet)
       const [r1, r2, r3] = await Promise.all([
         supabase.from('workouts').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'løping'),
         supabase.from('workouts').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'styrke'),
@@ -114,6 +133,9 @@ export default function Page() { // Viktig at det heter Page!
     if (hour < 18) return 'God ettermiddag, '
     return 'God kveld, '
   }, [])
+
+  const fmt = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString() : ''
 
   // === Lasteskjerm ===
   if (loading) {
@@ -225,10 +247,11 @@ export default function Page() { // Viktig at det heter Page!
             <CardHeader className="pb-2">
               <CardTitle className="text-base">👤 Profil</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">Innstillinger</CardContent>
+            <CardContent className="text-sm text-muted-foreground">Innstillinger & innlegg</CardContent>
           </Card>
         </Link>
       </section>
+
 
       {/* Feed: siste økter */}
       <section>
@@ -254,10 +277,42 @@ export default function Page() { // Viktig at det heter Page!
                     {!['løping','styrke','annet'].includes(w.type) && '📌'}
                   </span>
                   <span className="font-semibold">{w.title}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{fmt(w.created_at)}</span>
                 </div>
                 <Link href={`/workouts/${w.id}`} className="shrink-0">
                   <Button variant="secondary" size="sm">Åpne</Button>
                 </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Feed: dine siste innlegg */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-semibold">Siste innlegg</h2>
+          <Link href="/profile"><Button variant="ghost">Til profilen →</Button></Link>
+        </div>
+        {posts.length === 0 ? (
+          <Card>
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              Du har ikke postet noe ennå. Gå til «Profil» for å publisere ditt første innlegg.
+            </CardContent>
+          </Card>
+        ) : (
+          <ul className="space-y-2">
+            {posts.map((p) => (
+              <li key={p.id} className="border rounded-md bg-white px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">{fmt(p.created_at)}</span>
+                  {/* Hvis du seinere lager en egen post-side, lenk hit */}
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-sm">{p.content}</p>
+                {p.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.image_url} alt="post" className="mt-2 rounded-lg w-full" />
+                )}
               </li>
             ))}
           </ul>
