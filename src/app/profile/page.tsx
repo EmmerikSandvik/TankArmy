@@ -1,18 +1,19 @@
+// src/app/profile/page.tsx
 'use client'
 
-import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import type { User } from "@supabase/supabase-js"
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { User } from '@supabase/supabase-js'
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 type Profile = {
   id: string
   username: string | null
-  avatar_url: string | null
   bio: string | null
+  avatar_url: string | null
 }
 
 type Post = {
@@ -23,24 +24,38 @@ type Post = {
   created_at: string
 }
 
+const POSTS_BUCKET = 'posts'
+const AVATARS_BUCKET = 'avatars'
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024 // 10MB
+
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [avatarUploading, setAvatarUploading] = useState(false)
 
-  const [username, setUsername] = useState("")
-  const [bio, setBio] = useState("")
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [username, setUsername] = useState('')
+  const [bio, setBio] = useState('')
 
-  // Followers/following counts
-  const [followers, setFollowers] = useState<number>(0)
-  const [following, setFollowing] = useState<number>(0)
+  const [followers, setFollowers] = useState(0)
+  const [following, setFollowing] = useState(0)
 
-  // Posts
-  const [postContent, setPostContent] = useState("")
+  // avatar state
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+
+  // post state
+  const [postContent, setPostContent] = useState('')
+  const [postImageFile, setPostImageFile] = useState<File | null>(null)
+  const [postImagePreview, setPostImagePreview] = useState<string | null>(null)
+  const [posting, setPosting] = useState(false)
+
   const [posts, setPosts] = useState<Post[]>([])
+
+  // objectURL refs for cleanup
+  const avatarPreviewUrlRef = useRef<string | null>(null)
+  const postPreviewUrlRef = useRef<string | null>(null)
 
   const myUserId = useMemo(() => user?.id ?? null, [user])
 
@@ -53,134 +68,253 @@ export default function ProfilePage() {
         return
       }
 
-      // Hent profil, eller lag en tom hvis den ikke finnes
-      const { data: prof, error: pErr } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", u.id)
+      // hent/lag profil
+      const { data: prof, error: profErr } = await supabase
+        .from('profiles')
+        .select('id, username, bio, avatar_url')
+        .eq('id', u.id)
         .maybeSingle()
 
-      if (pErr) console.error(pErr)
+      if (profErr) console.error('profiles select error:', profErr)
 
       let current: Profile | null = prof
       if (!prof) {
-        const { data: inserted, error: iErr } = await supabase
-          .from("profiles")
+        const { data: inserted, error: insErr } = await supabase
+          .from('profiles')
           .insert({ id: u.id })
-          .select("*")
+          .select('id, username, bio, avatar_url')
           .single()
-        if (iErr) console.error(iErr)
+        if (insErr) console.error('profiles insert error:', insErr)
         current = inserted as Profile
       }
 
       if (current) {
         setProfile(current)
-        setUsername(current.username ?? "")
-        setBio(current.bio ?? "")
-        setAvatarUrl(current.avatar_url ?? null)
+        setUsername(current.username ?? '')
+        setBio(current.bio ?? '')
       }
 
-      // Teller for followers/following
-      const [{ count: followersCount }, { count: followingCount }] = await Promise.all([
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", u.id),
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", u.id),
+      // følgere/følger
+      const [followersRes, followingRes] = await Promise.all([
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', u.id),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', u.id),
       ])
-      setFollowers(followersCount ?? 0)
-      setFollowing(followingCount ?? 0)
+      setFollowers(followersRes.count ?? 0)
+      setFollowing(followingRes.count ?? 0)
 
-      // Hent egne posts
-      const { data: myPosts, error: postErr } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("user_id", u.id)
-        .order("created_at", { ascending: false })
-      if (postErr) console.error(postErr)
+      // mine innlegg
+      const { data: myPosts, error: postsErr } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', u.id)
+        .order('created_at', { ascending: false })
+
+      if (postsErr) console.error('posts select error:', postsErr)
       setPosts(myPosts ?? [])
 
       setLoading(false)
     }
-
     init()
+
+    // cleanup object URLs
+    return () => {
+      if (avatarPreviewUrlRef.current) URL.revokeObjectURL(avatarPreviewUrlRef.current)
+      if (postPreviewUrlRef.current) URL.revokeObjectURL(postPreviewUrlRef.current)
+    }
   }, [])
 
   const saveProfile = async () => {
     if (!myUserId) return
     setSaving(true)
     const { data, error } = await supabase
-      .from("profiles")
+      .from('profiles')
       .update({
         username: username || null,
         bio: bio || null,
-        avatar_url: avatarUrl || null,
       })
-      .eq("id", myUserId)
-      .select("*")
+      .eq('id', myUserId)
+      .select('id, username, bio, avatar_url')
       .single()
 
-    if (error) {
-      console.error(error)
-    } else {
-      setProfile(data as Profile)
-    }
+    if (error) console.error('saveProfile error:', error)
+    else setProfile(data as Profile)
+
     setSaving(false)
   }
 
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!myUserId) return
-    const file = e.target.files?.[0]
-    if (!file) return
+  // ---------- Shared upload helpers ----------
+  const buildFilePath = (base: string, file: File) => {
+    const mime = file.type || 'image/jpeg'
+    const fallbackExt = mime.split('/')[1] || 'jpg'
+    const nameExt = file.name.includes('.') ? (file.name.split('.').pop() || fallbackExt) : fallbackExt
+    const ext = nameExt.toLowerCase()
+    return `${base}/${crypto.randomUUID()}_${Date.now()}.${ext}`
+  }
 
-    setAvatarUploading(true)
-    try {
-      const ext = file.name.split(".").pop()
-      const filePath = `${myUserId}/avatar.${ext}`
-
-      // Last opp til storage
-      const { error: upErr } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file, { upsert: true })
-      if (upErr) throw upErr
-
-      // Hent public URL
-      const { data: publicUrlData } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(filePath)
-
-      const newUrl = publicUrlData.publicUrl
-      setAvatarUrl(newUrl)
-
-      // Lagre i profile
-      const { error: updErr } = await supabase
-        .from("profiles")
-        .update({ avatar_url: newUrl })
-        .eq("id", myUserId)
-
-      if (updErr) throw updErr
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setAvatarUploading(false)
+  const uploadToBucket = async (bucket: string, filePath: string, file: File) => {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file, { contentType: file.type || 'image/jpeg', cacheControl: '3600' })
+    if (error) {
+      console.error('storage upload error:', { message: (error as any).message, status: (error as any).status })
+      return null
     }
+    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(filePath)
+    if (pub?.publicUrl) return pub.publicUrl
+
+    const { data: signed, error: signErr } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(filePath, 60 * 60 * 24 * 7) // 7 dager
+    if (signErr) {
+      console.error('createSignedUrl error:', signErr)
+      return null
+    }
+    return signed?.signedUrl ?? null
+  }
+
+  // ---------- Avatar ----------
+  const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0] ?? null
+    setAvatarFile(file)
+
+    if (avatarPreviewUrlRef.current) {
+      URL.revokeObjectURL(avatarPreviewUrlRef.current)
+      avatarPreviewUrlRef.current = null
+    }
+
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        console.error('avatar error: not an image')
+        setAvatarFile(null)
+        return
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        console.error('avatar error: file too large')
+        setAvatarFile(null)
+        return
+      }
+      const url = URL.createObjectURL(file)
+      avatarPreviewUrlRef.current = url
+      setAvatarPreview(url)
+    } else {
+      setAvatarPreview(null)
+    }
+  }
+
+  const clearAvatarSelection = () => {
+    setAvatarFile(null)
+    if (avatarPreviewUrlRef.current) {
+      URL.revokeObjectURL(avatarPreviewUrlRef.current)
+      avatarPreviewUrlRef.current = null
+    }
+    setAvatarPreview(null)
+  }
+
+  const uploadAvatar = async () => {
+    if (!myUserId || !avatarFile) return
+    setUploadingAvatar(true)
+    try {
+      const filePath = buildFilePath(`${myUserId}/avatar`, avatarFile)
+      const url = await uploadToBucket(AVATARS_BUCKET, filePath, avatarFile)
+      if (!url) return
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: url })
+        .eq('id', myUserId)
+        .select('id, username, bio, avatar_url')
+        .single()
+
+      if (error) {
+        console.error('update avatar_url error:', error)
+      } else {
+        setProfile(data as Profile)
+        clearAvatarSelection()
+      }
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  // ---------- Posts ----------
+  const onSelectPostImage: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0] ?? null
+    setPostImageFile(file)
+
+    if (postPreviewUrlRef.current) {
+      URL.revokeObjectURL(postPreviewUrlRef.current)
+      postPreviewUrlRef.current = null
+    }
+
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        console.error('upload post image error: not an image')
+        setPostImageFile(null)
+        return
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        console.error('upload post image error: file too large')
+        setPostImageFile(null)
+        return
+      }
+      const url = URL.createObjectURL(file)
+      postPreviewUrlRef.current = url
+      setPostImagePreview(url)
+    } else {
+      setPostImagePreview(null)
+    }
+  }
+
+  const clearSelectedImage = () => {
+    setPostImageFile(null)
+    if (postPreviewUrlRef.current) {
+      URL.revokeObjectURL(postPreviewUrlRef.current)
+      postPreviewUrlRef.current = null
+    }
+    setPostImagePreview(null)
   }
 
   const createPost = async () => {
-    if (!myUserId || !postContent.trim()) return
-    const { data, error } = await supabase
-      .from("posts")
-      .insert({ user_id: myUserId, content: postContent.trim() })
-      .select("*")
-      .single()
-    if (error) {
-      console.error(error)
-      return
+    if (!myUserId) return
+    if (!postContent.trim() && !postImageFile) return
+
+    setPosting(true)
+    try {
+      let imageUrl: string | null = null
+      if (postImageFile) {
+        const filePath = buildFilePath(`${myUserId}/posts`, postImageFile)
+        imageUrl = await uploadToBucket(POSTS_BUCKET, filePath, postImageFile)
+      }
+
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: myUserId,
+          content: postContent.trim() || '',
+          image_url: imageUrl,
+        })
+        .select('*')
+        .single()
+
+      if (error) {
+        console.error('createPost error:', error)
+      } else if (data) {
+        setPosts((prev) => [data as Post, ...prev])
+        setPostContent('')
+        clearSelectedImage()
+      }
+    } finally {
+      setPosting(false)
     }
-    setPosts((prev) => [data as Post, ...prev])
-    setPostContent("")
   }
 
   const deletePost = async (id: string) => {
-    const { error } = await supabase.from("posts").delete().eq("id", id)
-    if (!error) setPosts((prev) => prev.filter((p) => p.id !== id))
+    const { error } = await supabase.from('posts').delete().eq('id', id)
+    if (error) {
+      console.error('deletePost error:', error)
+      return
+    }
+    setPosts((prev) => prev.filter((p) => p.id !== id))
   }
 
   if (loading) {
@@ -214,34 +348,50 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto mt-10 space-y-6">
-      {/* Profil-kort */}
+      {/* Profil */}
       <Card>
         <CardHeader>
-          <CardTitle>Min Profil</CardTitle>
-          <CardDescription>Oppdater brukerinformasjon og avatar</CardDescription>
+          <CardTitle>Min profil</CardTitle>
+          <CardDescription>Oppdater profilbilde, brukernavn og bio</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-gray-200 overflow-hidden">
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full grid place-items-center text-sm text-gray-500">Ingen</div>
-              )}
-            </div>
-            <div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                disabled={avatarUploading}
-                className="block text-sm"
+          {/* Avatar */}
+          <div className="grid gap-3">
+            <label className="text-sm font-medium">Profilbilde</label>
+            <div className="flex items-center gap-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={avatarPreview || profile?.avatar_url || '/avatar-placeholder.png'}
+                alt="avatar"
+                className="h-16 w-16 rounded-full object-cover border"
               />
-              {avatarUploading && <p className="text-xs text-gray-500 mt-1">Laster opp…</p>}
+              <div className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  onChange={onSelectAvatar}
+                  className="text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={uploadAvatar}
+                    disabled={!avatarFile || uploadingAvatar}
+                  >
+                    {uploadingAvatar ? 'Laster opp…' : 'Lagre profilbilde'}
+                  </Button>
+                  {avatarPreview && (
+                    <Button variant="secondary" size="sm" onClick={clearAvatarSelection}>
+                      Fjern valg
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Username */}
           <div className="grid gap-3">
             <label className="text-sm font-medium">Brukernavn</label>
             <input
@@ -252,6 +402,7 @@ export default function ProfilePage() {
             />
           </div>
 
+          {/* Bio */}
           <div className="grid gap-3">
             <label className="text-sm font-medium">Bio</label>
             <textarea
@@ -262,6 +413,7 @@ export default function ProfilePage() {
             />
           </div>
 
+          {/* Stats */}
           <div className="flex items-center gap-6 text-sm">
             <div><span className="font-semibold">{followers}</span> følgere</div>
             <div><span className="font-semibold">{following}</span> følger</div>
@@ -269,7 +421,7 @@ export default function ProfilePage() {
 
           <div>
             <Button onClick={saveProfile} disabled={saving}>
-              {saving ? "Lagrer…" : "Lagre profil"}
+              {saving ? 'Lagrer…' : 'Lagre profil'}
             </Button>
           </div>
         </CardContent>
@@ -279,7 +431,7 @@ export default function ProfilePage() {
       <Card>
         <CardHeader>
           <CardTitle>Nytt innlegg</CardTitle>
-          <CardDescription>Del en kort oppdatering</CardDescription>
+          <CardDescription>Legg til tekst og/eller bilde fra kamerarull/filer</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <textarea
@@ -288,15 +440,37 @@ export default function ProfilePage() {
             className="w-full rounded border px-3 py-2 min-h-[100px]"
             placeholder="Hva skjer i dag?"
           />
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={onSelectPostImage}
+              className="text-sm"
+            />
+            {postImagePreview && (
+              <div className="flex items-center gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={postImagePreview}
+                  alt="forhåndsvisning"
+                  className="h-12 w-12 rounded object-cover border"
+                />
+                <Button variant="destructive" size="sm" onClick={clearSelectedImage}>
+                  Fjern
+                </Button>
+              </div>
+            )}
+          </div>
           <div className="flex justify-end">
-            <Button onClick={createPost} disabled={!postContent.trim()}>
-              Publiser
+            <Button onClick={createPost} disabled={posting || (!postContent.trim() && !postImageFile)}>
+              {posting ? 'Publiserer…' : 'Publiser'}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Innleggsfeed */}
+      {/* Feed */}
       <div className="space-y-4">
         {posts.map((post) => (
           <Card key={post.id}>

@@ -70,10 +70,9 @@ export default function Navbar() {
 
       {/* Midt – universelt søk */}
       <div className="flex-1 max-w-md">
-  <SearchUsers placeholder="Søk etter brukere…" limit={8} />
-</div>
+        <SearchUsers placeholder="Søk etter brukere…" limit={8} />
+      </div>
 
-      
       {/* Høyre side */}
       {checking ? (
         <div className="h-8 w-28 rounded bg-gray-800 animate-pulse" />
@@ -81,6 +80,9 @@ export default function Navbar() {
         <div className="flex gap-3 items-center">
           <Link href="/profile" className="hover:underline text-sm" prefetch>
             Min profil
+          </Link>
+          <Link href="/settings" className="hover:underline text-sm" prefetch>
+            Innstillinger
           </Link>
           <Link
             href="/workouts/new"

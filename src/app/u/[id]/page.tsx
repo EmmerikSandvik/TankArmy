@@ -354,11 +354,12 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
           <div className="relative size-16 shrink-0 overflow-hidden rounded-full border">
             {profile.avatar_url ? (
               <Image
-                src={profile.avatar_url}
-                alt={profile.username ?? 'avatar'}
-                fill
-                className="object-cover"
-                sizes="64px"
+                 src={profile.avatar_url}
+                    alt={profile.username ?? 'avatar'}
+                    fill
+                    className="object-cover"
+                    sizes="64px"
+                    unoptimized
               />
             ) : (
               <div className="grid h-full w-full place-items-center text-sm text-muted-foreground">
