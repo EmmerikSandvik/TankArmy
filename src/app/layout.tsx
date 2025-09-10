@@ -1,23 +1,34 @@
+// src/app/layout.tsx
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// Juster import-sti om nødvendig:
+import Navbar from "@/components/Navbar"; // ev. "../components/Navbar" eller "@/components/navbar"
 
 export const metadata: Metadata = {
   title: "TreningsApp",
   description: "Oversikt over dine treningsøkter",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// TEMP: slå av Google Fonts for å unngå build-time fetch/timeout
+// (holder CSS-variablene tomme så klassen i <body> fortsatt fungerer)
+const geistSans = { variable: "" } as { variable: string };
+const geistMono = { variable: "" } as { variable: string };
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Navbar />
         <div className="max-w-5xl mx-auto p-6">{children}</div>
       </body>
     </html>
   );
 }
+
+
+
