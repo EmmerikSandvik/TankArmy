@@ -7,7 +7,13 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        // mobil-først spacing + skalering
+        "bg-card text-card-foreground flex flex-col rounded-xl border shadow-sm",
+        "gap-4 p-4",            // mobil
+        "sm:gap-5 sm:p-5",     // tablet
+        "md:gap-6 md:p-6",     // desktop
+        // litt interaksjon og bedre touch
+        "transition-shadow motion-safe:hover:shadow-md touch-manipulation",
         className
       )}
       {...props}
@@ -20,7 +26,14 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        // slå på container queries for header
+        "[container-type:inline-size] [container-name:card-header]",
+        // layout
+        "grid auto-rows-min items-start gap-1.5",
+        // spacing som matcher Card
+        "px-4 sm:px-5 md:px-6",
+        // hvis parent gir border-b, øk padding-bottom med breakpoint
+        "[.border-b]:pb-4 sm:[.border-b]:pb-5 md:[.border-b]:pb-6",
         className
       )}
       {...props}

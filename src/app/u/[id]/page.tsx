@@ -46,7 +46,7 @@ type LikeState = Record<string, { count: number; liked: boolean }>
 export default function UserProfilePage() {
   const { id } = useParams() as { id: string }
   return (
-    <div key={id} className="max-w-3xl mx-auto p-4">
+    <div key={id} className="w-full max-w-3xl mx-auto p-2 sm:p-4">
       <ProfileView idOrUsername={id} />
     </div>
   )
@@ -63,11 +63,9 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
 
   const [me, setMe] = useState<string | null>(null)
 
-  // Followers / following counts
   const [followersCount, setFollowersCount] = useState<number>(0)
   const [followingCount, setFollowingCount] = useState<number>(0)
 
-  // Followers / following lists (with lightweight pagination)
   type EdgeItem = { id: string; username: string | null; avatar_url: string | null; since: string }
   const pageSizeList = 15
   const [showFollowers, setShowFollowers] = useState(false)
@@ -98,13 +96,9 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
         setLoading(true)
         setError(null)
 
-        // Hent auth
-        {
-          const { data: auth } = await supabase.auth.getUser()
-          if (!cancelled) setMe(auth?.user?.id ?? null)
-        }
+        const { data: auth } = await supabase.auth.getUser()
+        if (!cancelled) setMe(auth?.user?.id ?? null)
 
-        // 1) Profil (id eller username)
         const { data: prof, error: profErr } = await supabase
           .from('profiles')
           .select('id, username, avatar_url, bio, created_at')
@@ -128,7 +122,6 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
         if (cancelled) return
         setProfile(prof)
 
-        // 2) Teller for følgere / følger
         {
           const [{ count: followersC }, { count: followingC }] = await Promise.all([
             supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', prof.id),
@@ -140,7 +133,6 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
           }
         }
 
-        // 3) Innlegg (hent pageSize+1 for hasMore)
         {
           const from = postPage * pageSize
           const to = from + pageSize
@@ -159,7 +151,6 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
           const visiblePosts = list.slice(0, pageSize)
           setPosts(visiblePosts)
 
-          // Likes for synlige posts
           const ids = visiblePosts.map(p => p.id)
           const myId = (await supabase.auth.getUser()).data?.user?.id ?? null
           if (ids.length) {
@@ -182,7 +173,6 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
           }
         }
 
-        // 4) Økter
         {
           const { data: workoutData, error: woErr } = await supabase
             .from('workouts')
@@ -194,7 +184,6 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
           if (!cancelled) setWorkouts(workoutData ?? [])
         }
 
-        // Reset lister når profil eller side endres
         if (!cancelled) {
           setFollowersList([])
           setFollowingList([])
@@ -214,10 +203,8 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idOrUsername, postPage])
 
-  // Laste følgere / følger (med enkel 2-trinns join)
   const loadFollowersPage = async (page = 0) => {
     if (!profile) return
     setListsBusy(true)
@@ -292,14 +279,11 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
     }
   }
 
-  // Trigger last når man åpner panelene første gang
   useEffect(() => {
     if (showFollowers && followersList.length === 0) loadFollowersPage(0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showFollowers])
   useEffect(() => {
     if (showFollowing && followingList.length === 0) loadFollowingPage(0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showFollowing])
 
   if (loading) {
@@ -348,18 +332,17 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Profilheader */}
       <Card>
-        <CardHeader className="flex flex-row items-center gap-4">
+        <CardHeader className="flex flex-col sm:flex-row items-center gap-4">
           <div className="relative size-16 shrink-0 overflow-hidden rounded-full border">
             {profile.avatar_url ? (
               <Image
-                 src={profile.avatar_url}
-                    alt={profile.username ?? 'avatar'}
-                    fill
-                    className="object-cover"
-                    sizes="64px"
-                    unoptimized
+                src={profile.avatar_url}
+                alt={profile.username ?? 'avatar'}
+                fill
+                className="object-cover"
+                sizes="64px"
+                unoptimized
               />
             ) : (
               <div className="grid h-full w-full place-items-center text-sm text-muted-foreground">
@@ -368,7 +351,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
             )}
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 text-center sm:text-left">
             <CardTitle className="text-xl">
               {profile.username ?? 'Ukjent bruker'}
             </CardTitle>
@@ -376,29 +359,26 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
               Med siden {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : '—'}
             </CardDescription>
 
-            {/* Følger-teller + knapper */}
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <div className="mt-2 flex flex-wrap justify-center sm:justify-start items-center gap-2 text-sm">
               <Button
                 variant="ghost"
                 className="px-2 h-7"
                 onClick={() => setShowFollowers((v) => !v)}
-                title="Vis følgere"
               >
                 <span className="font-medium">{followersCount}</span>&nbsp;følgere
               </Button>
-              <span className="text-muted-foreground">•</span>
+              <span className="hidden sm:inline text-muted-foreground">•</span>
               <Button
                 variant="ghost"
                 className="px-2 h-7"
                 onClick={() => setShowFollowing((v) => !v)}
-                title="Vis hvem brukeren følger"
               >
                 Følger&nbsp;<span className="font-medium">{followingCount}</span>
               </Button>
             </div>
           </div>
 
-          <CardContent className="p-0 flex gap-2">
+          <CardContent className="p-0 flex flex-wrap justify-center sm:justify-end gap-2">
             {me && profile.id !== me && (
               <FollowButton
                 profileId={profile.id}
@@ -416,7 +396,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
                 } catch {}
               }}
             >
-              Kopier profil-lenke
+              Kopier lenke
             </Button>
 
             <Button asChild variant="outline">
@@ -427,31 +407,21 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
 
         {profile.bio && (
           <CardContent>
-            <p className="text-sm text-muted-foreground">{profile.bio}</p>
+            <p className="text-sm text-muted-foreground text-center sm:text-left">{profile.bio}</p>
           </CardContent>
         )}
       </Card>
 
-      {/* Panel: Følgere */}
+      {/* Følgere */}
       {showFollowers && (
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle>Følgere</CardTitle>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={listsBusy || followersPage === 0}
-                onClick={() => loadFollowersPage(Math.max(0, followersPage - 1))}
-              >
+              <Button size="sm" disabled={listsBusy || followersPage === 0} onClick={() => loadFollowersPage(Math.max(0, followersPage - 1))}>
                 Forrige
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={listsBusy || !followersHasMore}
-                onClick={() => loadFollowersPage(followersPage + 1)}
-              >
+              <Button size="sm" disabled={listsBusy || !followersHasMore} onClick={() => loadFollowersPage(followersPage + 1)}>
                 Neste
               </Button>
             </div>
@@ -462,7 +432,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
             ) : (
               <ul className="space-y-3">
                 {followersList.map(u => (
-                  <li key={`${u.id}-${u.since}`} className="flex items-center gap-3">
+                  <li key={`${u.id}-${u.since}`} className="flex flex-wrap sm:flex-nowrap items-center gap-3">
                     <div className="relative size-9 overflow-hidden rounded-full border">
                       {u.avatar_url ? (
                         <Image src={u.avatar_url} alt={u.username ?? 'avatar'} fill className="object-cover" sizes="36px" />
@@ -476,7 +446,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
                         Siden {new Date(u.since).toLocaleDateString()}
                       </div>
                     </div>
-                    <Button asChild size="sm" variant="outline">
+                    <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
                       <Link href={`/u/${u.id}`}>Se profil</Link>
                     </Button>
                   </li>
@@ -487,26 +457,16 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
         </Card>
       )}
 
-      {/* Panel: Følger */}
+      {/* Følger */}
       {showFollowing && (
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle>Følger</CardTitle>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={listsBusy || followingPage === 0}
-                onClick={() => loadFollowingPage(Math.max(0, followingPage - 1))}
-              >
+              <Button size="sm" disabled={listsBusy || followingPage === 0} onClick={() => loadFollowingPage(Math.max(0, followingPage - 1))}>
                 Forrige
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={listsBusy || !followingHasMore}
-                onClick={() => loadFollowingPage(followingPage + 1)}
-              >
+              <Button size="sm" disabled={listsBusy || !followingHasMore} onClick={() => loadFollowingPage(followingPage + 1)}>
                 Neste
               </Button>
             </div>
@@ -517,7 +477,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
             ) : (
               <ul className="space-y-3">
                 {followingList.map(u => (
-                  <li key={`${u.id}-${u.since}`} className="flex items-center gap-3">
+                  <li key={`${u.id}-${u.since}`} className="flex flex-wrap sm:flex-nowrap items-center gap-3">
                     <div className="relative size-9 overflow-hidden rounded-full border">
                       {u.avatar_url ? (
                         <Image src={u.avatar_url} alt={u.username ?? 'avatar'} fill className="object-cover" sizes="36px" />
@@ -531,7 +491,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
                         Siden {new Date(u.since).toLocaleDateString()}
                       </div>
                     </div>
-                    <Button asChild size="sm" variant="outline">
+                    <Button asChild size="sm" variant="outline" className="w-full sm:w-auto">
                       <Link href={`/u/${u.id}`}>Se profil</Link>
                     </Button>
                   </li>
@@ -542,7 +502,6 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
         </Card>
       )}
 
-      {/* Statistikk */}
       <Card>
         <CardHeader>
           <CardTitle>Statistikk</CardTitle>
@@ -551,34 +510,20 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <StatTile label="Økter totalt" value={stats.totalSessions.toString()} />
-            <StatTile
-              label="Distanse totalt"
-              value={`${Number(stats.totalDistance.toFixed(1))} km`}
-            />
+            <StatTile label="Distanse totalt" value={`${Number(stats.totalDistance.toFixed(1))} km`} />
             <StatTile label="Økter siste 7 dager" value={stats.last7.toString()} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Innlegg */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Innlegg</h2>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={postPage === 0}
-              onClick={() => setPostPage((p) => Math.max(0, p - 1))}
-            >
+            <Button size="sm" disabled={postPage === 0} onClick={() => setPostPage((p) => Math.max(0, p - 1))}>
               Forrige
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!hasMorePosts}
-              onClick={() => setPostPage((p) => p + 1)}
-            >
+            <Button size="sm" disabled={!hasMorePosts} onClick={() => setPostPage((p) => p + 1)}>
               Neste
             </Button>
           </div>
@@ -586,7 +531,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
 
         {posts.length === 0 ? (
           <Card>
-            <CardContent className="py-6 text-sm text-muted-foreground">
+            <CardContent className="py-6 text-sm text-muted-foreground text-center sm:text-left">
               Ingen innlegg ennå.
             </CardContent>
           </Card>
@@ -598,7 +543,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
                 <li key={post.id}>
                   <Card>
                     <CardContent className="py-4">
-                      <div className="flex items-start gap-3">
+                      <div className="flex flex-col sm:flex-row items-start gap-3">
                         <div className="relative size-9 shrink-0 overflow-hidden rounded-full border">
                           {profile.avatar_url ? (
                             <Image
@@ -610,7 +555,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
                             />
                           ) : null}
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 w-full">
                           <div className="text-sm text-muted-foreground">
                             <span className="font-medium text-foreground">
                               {profile.username ?? 'Ukjent'}
@@ -622,19 +567,14 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
                             <img
                               src={post.image_url}
                               alt="Innlegg"
-                              className="mt-3 rounded-xl border"
+                              className="mt-3 rounded-xl border max-w-full h-auto"
                             />
                           )}
 
                           <div className="mt-3 flex items-center gap-3">
-                            <LikeButton
-                              postId={post.id}
-                              initialLiked={like.liked}
-                              initialCount={like.count}
-                            />
+                            <LikeButton postId={post.id} initialLiked={like.liked} initialCount={like.count} />
                           </div>
 
-                          {/* --- KOMMENTARER (direkte inline) --- */}
                           <div className="mt-4">
                             <CommentsList postId={post.id} />
                             <CommentFormInline postId={post.id} />
@@ -653,16 +593,7 @@ function ProfileView({ idOrUsername }: { idOrUsername: string }) {
   )
 }
 
-/** Inline LikeButton for å unngå import-feil */
-function LikeButton({
-  postId,
-  initialLiked,
-  initialCount,
-}: {
-  postId: string
-  initialLiked: boolean
-  initialCount: number
-}) {
+function LikeButton({ postId, initialLiked, initialCount }: { postId: string; initialLiked: boolean; initialCount: number }) {
   const [liked, setLiked] = useState(initialLiked)
   const [count, setCount] = useState(initialCount)
   const [busy, setBusy] = useState(false)
@@ -676,17 +607,11 @@ function LikeButton({
 
       if (liked) {
         setLiked(false); setCount((c) => c - 1)
-        const { error } = await supabase
-          .from('post_likes')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', uid)
+        const { error } = await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', uid)
         if (error) { setLiked(true); setCount((c) => c + 1) }
       } else {
         setLiked(true); setCount((c) => c + 1)
-        const { error } = await supabase
-          .from('post_likes')
-          .insert({ post_id: postId, user_id: uid })
+        const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: uid })
         if (error) { setLiked(false); setCount((c) => c - 1) }
       }
     } finally {
@@ -701,14 +626,7 @@ function LikeButton({
   )
 }
 
-/** Inline FollowButton for å unngå import-feil */
-function FollowButton({
-  profileId,
-  onChange,
-}: {
-  profileId: string
-  onChange?: (following: boolean) => void
-}) {
+function FollowButton({ profileId, onChange }: { profileId: string; onChange?: (following: boolean) => void }) {
   const [loading, setLoading] = useState(true)
   const [following, setFollowing] = useState(false)
   const [me, setMe] = useState<string | null>(null)
@@ -724,12 +642,7 @@ function FollowButton({
         setMe(uid)
 
         if (uid) {
-          const { data, error } = await supabase
-            .from('follows')
-            .select('follower_id')
-            .eq('follower_id', uid)
-            .eq('following_id', profileId)
-            .maybeSingle()
+          const { data, error } = await supabase.from('follows').select('follower_id').eq('follower_id', uid).eq('following_id', profileId).maybeSingle()
           if (!cancelled) setFollowing(!!data && !error)
         } else {
           if (!cancelled) setFollowing(false)
@@ -747,19 +660,13 @@ function FollowButton({
     setLoading(true)
     try {
       if (following) {
-        const { error } = await supabase
-          .from('follows')
-          .delete()
-          .eq('follower_id', me)
-          .eq('following_id', profileId)
+        const { error } = await supabase.from('follows').delete().eq('follower_id', me).eq('following_id', profileId)
         if (!error) {
           setFollowing(false)
           onChange?.(false)
         }
       } else {
-        const { error } = await supabase
-          .from('follows')
-          .insert({ follower_id: me, following_id: profileId })
+        const { error } = await supabase.from('follows').insert({ follower_id: me, following_id: profileId })
         if (!error) {
           setFollowing(true)
           onChange?.(true)
@@ -779,17 +686,12 @@ function FollowButton({
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border p-4 shadow-sm">
+    <div className="rounded-xl border p-4 shadow-sm text-center sm:text-left">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value}</div>
     </div>
   )
 }
-
-/* =======================
-   KOMMENTAR-KOMPONENTER
-   (direkte inline)
-   ======================= */
 
 type CommentRow = {
   id: string
@@ -813,14 +715,10 @@ function CommentsList({ postId }: { postId: string }) {
   const load = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('comments')
-        .select(`
+      const { data, error } = await supabase.from('comments').select(`
           id, post_id, user_id, content, created_at,
           profiles:user_id ( username, avatar_url )
-        `)
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
+        `).eq('post_id', postId).order('created_at', { ascending: true })
       if (!error) setItems(data ?? [])
     } finally {
       setLoading(false)
@@ -829,31 +727,17 @@ function CommentsList({ postId }: { postId: string }) {
 
   useEffect(() => {
     load()
-
     const onAdded = (e: any) => {
       if (e?.detail?.postId === postId) load()
     }
     window.addEventListener('comment:added', onAdded)
 
-    const channel = supabase
-      .channel(`comments:${postId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
-        () => load()
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
-        () => load()
-      )
-      .subscribe()
+    const channel = supabase.channel(`comments:${postId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` }, () => load()).on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` }, () => load()).subscribe()
 
     return () => {
       window.removeEventListener('comment:added', onAdded)
       supabase.removeChannel(channel)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId])
 
   const handleDelete = async (id: string) => {
@@ -865,9 +749,7 @@ function CommentsList({ postId }: { postId: string }) {
 
       const { error } = await supabase.from('comments').delete().eq('id', id).eq('user_id', me)
       if (error) {
-        console.error('[comments.delete]', error)
-        alert(error.message)
-        setItems(prev) // rollback
+        setItems(prev)
       }
     } finally {
       setBusyId(null)
@@ -880,20 +762,14 @@ function CommentsList({ postId }: { postId: string }) {
   return (
     <ul className="space-y-3">
       {items.map((c) => (
-        <li key={c.id} className="flex items-start gap-2">
+        <li key={c.id} className="flex flex-wrap sm:flex-nowrap items-start gap-2">
           <div className="relative size-7 overflow-hidden rounded-full border shrink-0">
             {c.profiles?.avatar_url ? (
-              <Image
-                src={c.profiles.avatar_url}
-                alt={c.profiles.username ?? 'avatar'}
-                fill
-                className="object-cover"
-                sizes="28px"
-              />
+              <Image src={c.profiles.avatar_url} alt={c.profiles.username ?? 'avatar'} fill className="object-cover" sizes="28px" />
             ) : null}
           </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <div className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">
                   {c.profiles?.username ?? c.user_id.slice(0, 8)}
@@ -901,12 +777,7 @@ function CommentsList({ postId }: { postId: string }) {
                 • {new Date(c.created_at).toLocaleString()}
               </div>
               {me === c.user_id && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleDelete(c.id)}
-                  disabled={busyId === c.id}
-                >
+                <Button size="sm" variant="outline" onClick={() => handleDelete(c.id)} disabled={busyId === c.id}>
                   {busyId === c.id ? 'Sletter…' : 'Slett'}
                 </Button>
               )}
@@ -937,11 +808,7 @@ function CommentFormInline({ postId }: { postId: string }) {
       const uid = auth?.user?.id
       if (!uid) return
 
-      const { error } = await supabase.from('comments').insert({
-        post_id: postId,
-        user_id: uid,
-        content: value.trim(),
-      })
+      const { error } = await supabase.from('comments').insert({ post_id: postId, user_id: uid, content: value.trim() })
       if (!error) {
         setValue('')
         window.dispatchEvent(new CustomEvent('comment:added', { detail: { postId } }))
@@ -952,15 +819,15 @@ function CommentFormInline({ postId }: { postId: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="mt-3 flex gap-2">
+    <form onSubmit={submit} className="mt-3 flex flex-col sm:flex-row gap-2">
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={authed ? 'Skriv en kommentar…' : 'Logg inn for å kommentere'}
         disabled={!authed || busy}
-        className="flex-1 rounded border px-3 py-2 bg-white text-black disabled:opacity-50"
+        className="flex-1 rounded border px-3 py-2 bg-white text-black disabled:opacity-50 w-full"
       />
-      <Button type="submit" disabled={!authed || busy || !value.trim()}>
+      <Button type="submit" disabled={!authed || busy || !value.trim()} className="w-full sm:w-auto">
         Kommenter
       </Button>
     </form>

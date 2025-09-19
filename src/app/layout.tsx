@@ -1,34 +1,44 @@
 // src/app/layout.tsx
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-// Juster import-sti om nødvendig:
-import Navbar from "@/components/Navbar"; // ev. "../components/Navbar" eller "@/components/navbar"
+import Navbar from "@/components/Navbar";
+import ThemeProvider from "@/components/ThemeProvider";
+import I18nProvider, { type Lang } from "@/lib/i18n/I18nProvider";
+import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
   title: "TreningsApp",
   description: "Oversikt over dine treningsøkter",
 };
 
-// TEMP: slå av Google Fonts for å unngå build-time fetch/timeout
-// (holder CSS-variablene tomme så klassen i <body> fortsatt fungerer)
-const geistSans = { variable: "" } as { variable: string };
-const geistMono = { variable: "" } as { variable: string };
+// ✅ Viktig for mobil (iPhone, Android osv.)
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+// Google Fonts via next/font
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Les valgt språk fra cookie (fall tilbake til 'nb')
+  const cookieStore = cookies();
+  const lang = (cookieStore.get("lang")?.value as Lang) || "nb";
+
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Navbar />
-        <div className="max-w-5xl mx-auto p-6">{children}</div>
+    <html lang={lang} suppressHydrationWarning>
+      {/* NB: next-themes styrer 'class' på <html> for tema */}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100`}>
+        <ThemeProvider>
+          <I18nProvider lang={lang}>
+            <Navbar />
+            <div className="max-w-5xl mx-auto p-6">{children}</div>
+          </I18nProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
 }
-
-
-

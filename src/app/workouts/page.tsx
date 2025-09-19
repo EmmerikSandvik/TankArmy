@@ -44,10 +44,10 @@ export default function WorkoutsPage() {
   const [title, setTitle] = useState('')
   const [type, setType] = useState<'løping' | 'styrke' | 'annet'>('løping')
 
-  // Løping
-  const [distance, setDistance] = useState<number | undefined>()
-  const [totalTime, setTotalTime] = useState<string>('') // hh:mm:ss
-  const [zone, setZone] = useState<number | undefined>()
+  // Løping (flere økter)
+  const [runningSessions, setRunningSessions] = useState<
+    { distance: number; total_time: string; zone: number }[]
+  >([{ distance: 0, total_time: '', zone: 0 }])
 
   // Annet
   const [description, setDescription] = useState('')
@@ -131,33 +131,50 @@ export default function WorkoutsPage() {
           ? strengthExercises.filter((ex) => ex.exercise.trim() !== '')
           : []
 
-      const newWorkout: NewWorkout = {
-        title: title.trim(),
-        user_id: user.id,
-        type,
-        ...(type === 'løping' && distance !== undefined && totalTime && zone !== undefined
-          ? { distance, total_time: totalTime, zone }
-          : {}),
-        ...(type === 'styrke' && cleanedStrength.length > 0
-          ? { strength_exercises: cleanedStrength }
-          : {}),
-        ...(type === 'annet' && description.trim()
-          ? { description: description.trim() }
-          : {}),
+      let newWorkouts: NewWorkout[] = []
+
+      if (type === 'løping') {
+        newWorkouts = runningSessions
+          .filter((run) => run.distance > 0 && run.total_time.trim() !== '' && run.zone > 0)
+          .map((run) => ({
+            title: title.trim(),
+            user_id: user.id,
+            type,
+            distance: run.distance,
+            total_time: run.total_time,
+            zone: run.zone,
+          }))
+      } else if (type === 'styrke' && cleanedStrength.length > 0) {
+        newWorkouts = [{
+          title: title.trim(),
+          user_id: user.id,
+          type,
+          strength_exercises: cleanedStrength,
+        }]
+      } else if (type === 'annet' && description.trim()) {
+        newWorkouts = [{
+          title: title.trim(),
+          user_id: user.id,
+          type,
+          description: description.trim(),
+        }]
       }
 
-      const { data, error } = await supabase.from('workouts').insert([newWorkout]).select()
+      if (newWorkouts.length === 0) {
+        setLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase.from('workouts').insert(newWorkouts).select()
       if (error) {
         console.error('Feil ved innsending:', error)
       } else if (data && data.length > 0) {
-        setWorkouts((prev) => [data[0] as Workout, ...prev])
+        setWorkouts((prev) => [...data as Workout[], ...prev])
         // Nullstill felter
         setTitle('')
-        setDistance(undefined)
-        setTotalTime('')
-        setZone(undefined)
         setDescription('')
         setStrengthExercises([{ exercise: '', category: '', sets: 0, reps: 0, weight: 0, rpe: 0 }])
+        setRunningSessions([{ distance: 0, total_time: '', zone: 0 }])
         setType('løping')
       }
     } catch (err) {
@@ -212,6 +229,33 @@ export default function WorkoutsPage() {
     setStrengthExercises((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // === Dynamiske løpe-felt ===
+  const handleRunChange = (
+    index: number,
+    field: 'distance' | 'total_time' | 'zone',
+    value: string
+  ) => {
+    setRunningSessions((prev) => {
+      const next = [...prev]
+      const current = { ...next[index] }
+      if (field === 'distance' || field === 'zone') {
+        current[field] = value === '' ? 0 : Number(value)
+      } else {
+        current[field] = value
+      }
+      next[index] = current
+      return next
+    })
+  }
+
+  const addRunField = () => {
+    setRunningSessions((prev) => [...prev, { distance: 0, total_time: '', zone: 0 }])
+  }
+
+  const removeRunField = (index: number) => {
+    setRunningSessions((prev) => prev.filter((_, i) => i !== index))
+  }
+
   return (
     <main className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">Dine treningsøkter</h1>
@@ -220,13 +264,15 @@ export default function WorkoutsPage() {
       <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-2">
         {/* Navn */}
         <input
-          type="text"
-          placeholder="Navn på økt"
-          className="border px-3 py-2 rounded w-full"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+  type="time"
+  step={1}
+  pattern="\d{2}:\d{2}:\d{2}"
+  placeholder="hh:mm:ss"
+  className="border px-3 py-2 rounded w-full"
+  value={run.total_time}
+  onChange={(e) => handleRunChange(i, 'total_time', e.target.value)}
+  required
+/>
 
         {/* Type */}
         <select
@@ -241,40 +287,63 @@ export default function WorkoutsPage() {
 
         {/* Løping-felter */}
         {type === 'løping' && (
-          <>
-            <input
-              type="number"
-              step={0.01}
-              placeholder="Lengde (km)"
-              className="border px-3 py-2 rounded w-full"
-              value={distance ?? ''}
-              onChange={(e) => setDistance(e.target.value ? parseFloat(e.target.value) : undefined)}
-              required
-            />
+          <div className="space-y-2">
+            <label className="font-medium text-sm">Løpeøkter:</label>
+            {runningSessions.map((run, i) => (
+              <div key={i} className="border p-3 rounded space-y-2">
+                <input
+                  type="number"
+                  step={0.01}
+                  placeholder="Lengde (km)"
+                  className="border px-3 py-2 rounded w-full"
+                  value={run.distance === 0 ? '' : run.distance}
+                  onChange={(e) => handleRunChange(i, 'distance', e.target.value)}
+                  required
+                />
 
-            <input
-              type="time"
-              step={1}
-              className="border px-3 py-2 rounded w-full"
-              value={totalTime}
-              onChange={(e) => setTotalTime(e.target.value)}
-              required
-            />
+                <input
+                  type="text"
+                  placeholder="Tid (hh:mm:ss)"
+                  className="border px-3 py-2 rounded w-full"
+                  value={run.total_time}
+                  onChange={(e) => handleRunChange(i, 'total_time', e.target.value)}
+                  required
+                />
 
-            <select
-              value={zone ?? ''}
-              onChange={(e) => setZone(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              className="border px-3 py-2 rounded"
-              required
+                <select
+                  value={run.zone === 0 ? '' : run.zone}
+                  onChange={(e) => handleRunChange(i, 'zone', e.target.value)}
+                  className="border px-3 py-2 rounded"
+                  required
+                >
+                  <option value="">Velg sone</option>
+                  {[1, 2, 3, 4, 5].map((z) => (
+                    <option key={z} value={z}>
+                      Sone {z}
+                    </option>
+                  ))}
+                </select>
+
+                {runningSessions.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeRunField(i)}
+                    className="text-red-600 text-sm"
+                  >
+                    ❌ Fjern økt
+                  </button>
+                )}
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addRunField}
+              className="text-blue-600 text-sm"
             >
-              <option value="">Velg sone</option>
-              {[1, 2, 3, 4, 5].map((z) => (
-                <option key={z} value={z}>
-                  Sone {z}
-                </option>
-              ))}
-            </select>
-          </>
+              + Legg til økt
+            </button>
+          </div>
         )}
 
         {/* Styrke-felter */}

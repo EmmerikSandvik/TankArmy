@@ -25,7 +25,7 @@ type Workout = {
   type: WorkoutType
   distance?: number | null
   zone?: number | null
-  total_time?: string | null // "HH:MM:SS" eller "MM:SS"
+  total_time?: string | null
   strength_exercises?: StrengthExercise[] | null
   description?: string | null
   created_at?: string
@@ -44,7 +44,6 @@ const parseHms = (txt?: string | null): number => {
     const [m, s] = parts
     return m * 60 + s
   }
-  // bare sekunder
   if (parts.length === 1) return parts[0]
   return 0
 }
@@ -77,10 +76,10 @@ function StatCard({ label, value, hint }: { label: string; value: React.ReactNod
   return (
     <Card className="rounded-2xl">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
+        <CardTitle className="text-xs sm:text-sm text-muted-foreground">{label}</CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="text-2xl font-semibold">{value}</div>
+        <div className="text-lg sm:text-2xl font-semibold">{value}</div>
         {hint ? <div className="text-xs text-muted-foreground mt-1">{hint}</div> : null}
       </CardContent>
     </Card>
@@ -103,7 +102,6 @@ export default function StatsPage() {
       setLoading(true)
       setError(null)
 
-      // Prøv å hente innlogget bruker og filtrer på user_id hvis mulig
       const { data: userData } = await supabase.auth.getUser()
       const me = userData.user ?? null
       if (mounted) setUser(me)
@@ -125,7 +123,7 @@ export default function StatsPage() {
     return () => { mounted = false }
   }, [])
 
-  // Filtrer på tidsperiode i klient
+  // Filtrer
   const now = new Date()
   const minDate = useMemo(() => {
     if (range === 'all') return null
@@ -143,7 +141,7 @@ export default function StatsPage() {
     })
   }, [workouts, minDate])
 
-  // Aggreger statistikk
+  // Aggreger
   const { totals, running, strength, byMonth } = useMemo(() => {
     const totals = {
       count: filtered.length,
@@ -151,21 +149,8 @@ export default function StatsPage() {
       firstDate: '' as string | null,
       lastDate: '' as string | null,
     }
-    const running = {
-      sessions: 0,
-      totalKm: 0,
-      totalSec: 0,
-      avgKm: 0,
-      avgPaceSec: 0,
-      zones: {} as Record<number, number>, // sone -> antall
-    }
-    const strength = {
-      sessions: 0,
-      totalSets: 0,
-      totalReps: 0,
-      totalVolume: 0, // kg
-      topExercises: {} as Record<string, { volume: number; sets: number; reps: number }>,
-    }
+    const running = { sessions: 0, totalKm: 0, totalSec: 0, avgKm: 0, avgPaceSec: 0, zones: {} as Record<number, number> }
+    const strength = { sessions: 0, totalSets: 0, totalReps: 0, totalVolume: 0, topExercises: {} as Record<string, { volume: number; sets: number; reps: number }> }
     const byMonth = new Map<string, { count: number; km: number; sec: number; volume: number }>()
 
     if (filtered.length > 0) {
@@ -186,9 +171,7 @@ export default function StatsPage() {
         running.totalKm += km
         running.totalSec += sec
         if (w.zone != null) running.zones[w.zone] = (running.zones[w.zone] ?? 0) + 1
-        bucket.count += 1
-        bucket.km += km
-        bucket.sec += sec
+        bucket.count += 1; bucket.km += km; bucket.sec += sec
       } else if (w.type === 'styrke') {
         strength.sessions++
         const exs = w.strength_exercises ?? []
@@ -199,25 +182,15 @@ export default function StatsPage() {
           strength.totalVolume += vol
           const key = ex.exercise
           if (!strength.topExercises[key]) strength.topExercises[key] = { volume: 0, sets: 0, reps: 0 }
-          strength.topExercises[key].volume += vol
-          strength.topExercises[key].sets += ex.sets
-          strength.topExercises[key].reps += ex.sets * ex.reps
-          // månedsvolum
-          const b = byMonth.get(mk)!
-          b.volume += vol
+          strength.topExercises[key].volume += vol; strength.topExercises[key].sets += ex.sets; strength.topExercises[key].reps += ex.sets * ex.reps
+          byMonth.get(mk)!.volume += vol
         }
-        const b = byMonth.get(mk)!
-        b.count += 1
-      } else {
-        // annet
-        const b = byMonth.get(mk)!
-        b.count += 1
-      }
+        bucket.count += 1
+      } else { bucket.count += 1 }
     }
 
     running.avgKm = running.sessions > 0 ? running.totalKm / running.sessions : 0
     running.avgPaceSec = running.totalKm > 0 ? running.totalSec / running.totalKm : 0
-
     return { totals, running, strength, byMonth }
   }, [filtered])
 
@@ -227,30 +200,21 @@ export default function StatsPage() {
     return entries.slice(0, 5)
   }, [strength.topExercises])
 
-  if (loading) {
-    return <div className="p-6">Laster inn statistikk…</div>
-  }
-
+  if (loading) return <div className="p-6">Laster inn statistikk…</div>
   if (error) {
     return (
-      <div className="max-w-5xl mx-auto p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Kunne ikke hente data</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-red-600">{error}</p>
-          </CardContent>
-        </Card>
+      <div className="max-w-5xl mx-auto p-3 sm:p-6">
+        <Card><CardHeader><CardTitle>Kunne ikke hente data</CardTitle></CardHeader><CardContent><p className="text-sm text-red-600">{error}</p></CardContent></Card>
       </div>
     )
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Statistikk</h1>
-        <div className="flex gap-2">
+    <div className="max-w-5xl mx-auto p-3 sm:p-6 space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 className="text-xl sm:text-2xl font-bold">Statistikk</h1>
+        <div className="flex flex-wrap gap-2">
           <RangeButton active={range === '7d'} onClick={() => setRange('7d')}>7 dager</RangeButton>
           <RangeButton active={range === '30d'} onClick={() => setRange('30d')}>30 dager</RangeButton>
           <RangeButton active={range === '90d'} onClick={() => setRange('90d')}>90 dager</RangeButton>
@@ -273,150 +237,108 @@ export default function StatsPage() {
         ) : null}
       </section>
 
-      {/* Running details */}
+      {/* Running */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Løping</h2>
-        <Card>
-          <CardContent className="p-4">
-            {running.sessions === 0 ? (
-              <p className="text-sm text-muted-foreground">Ingen løpeøkter i valgt periode.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <StatCard label="Snitt pr økt" value={`${running.avgKm.toFixed(2)} km`} />
-                <StatCard label="Total tid" value={formatDuration(running.totalSec)} />
-                <StatCard label="Snittfart" value={formatPace(running.avgPaceSec)} />
+        <Card><CardContent className="p-4">
+          {running.sessions === 0 ? <p className="text-sm text-muted-foreground">Ingen løpeøkter i valgt periode.</p> : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard label="Snitt pr økt" value={`${running.avgKm.toFixed(2)} km`} />
+              <StatCard label="Total tid" value={formatDuration(running.totalSec)} />
+              <StatCard label="Snittfart" value={formatPace(running.avgPaceSec)} />
+            </div>
+          )}
+          {Object.keys(running.zones).length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium mb-2">Sonefordeling</h3>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(running.zones).sort((a, b) => Number(a[0]) - Number(b[0]))
+                  .map(([zone, count]) => (
+                    <span key={zone} className="text-xs bg-muted px-2 py-1 rounded-full">Sone {zone}: {count}</span>
+                ))}
               </div>
-            )}
-            {Object.keys(running.zones).length > 0 ? (
-              <div className="mt-4">
-                <h3 className="text-sm font-medium mb-2">Sonefordeling</h3>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(running.zones)
-                    .sort((a, b) => Number(a[0]) - Number(b[0]))
-                    .map(([zone, count]) => (
-                      <span key={zone} className="text-xs bg-muted px-2 py-1 rounded-full">
-                        Sone {zone}: {count}
-                      </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+            </div>
+          )}
+        </CardContent></Card>
       </section>
 
-      {/* Strength details */}
+      {/* Strength */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Styrke</h2>
-        <Card>
-          <CardContent className="p-4">
-            {strength.sessions === 0 ? (
-              <p className="text-sm text-muted-foreground">Ingen styrkeøkter i valgt periode.</p>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                  <StatCard label="Økter" value={strength.sessions} />
-                  <StatCard label="Sett / Reps" value={`${strength.totalSets} / ${strength.totalReps}`} />
-                  <StatCard label="Totalt volum" value={`${Math.round(strength.totalVolume).toLocaleString('no-NO')} kg`} />
-                </div>
-                <h3 className="text-sm font-medium mb-2">Toppe øvelser (volum)</h3>
-                <ul className="text-sm list-disc pl-5 space-y-1">
-                  {topStrengthList.map((e) => (
-                    <li key={e.name}>
-                      <span className="font-medium">{e.name}</span>{' '}
-                      – {Math.round(e.volume).toLocaleString('no-NO')} kg • {e.sets} sett • {e.reps} reps
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-4">
+          {strength.sessions === 0 ? <p className="text-sm text-muted-foreground">Ingen styrkeøkter i valgt periode.</p> : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <StatCard label="Økter" value={strength.sessions} />
+                <StatCard label="Sett / Reps" value={`${strength.totalSets} / ${strength.totalReps}`} />
+                <StatCard label="Totalt volum" value={`${Math.round(strength.totalVolume).toLocaleString('no-NO')} kg`} />
+              </div>
+              <h3 className="text-sm font-medium mb-2">Toppe øvelser (volum)</h3>
+              <ul className="text-sm list-disc pl-5 space-y-1">
+                {topStrengthList.map(e => (
+                  <li key={e.name}><span className="font-medium">{e.name}</span> – {Math.round(e.volume).toLocaleString('no-NO')} kg • {e.sets} sett • {e.reps} reps</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </CardContent></Card>
       </section>
 
-      {/* Monthly breakdown */}
+      {/* Monthly */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Per måned</h2>
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left p-3">Måned</th>
-                    <th className="text-right p-3">Økter</th>
-                    <th className="text-right p-3">Km løp</th>
-                    <th className="text-right p-3">Løpstid</th>
-                    <th className="text-right p-3">Styrkevolum</th>
+        <Card><CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs sm:text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-2 sm:p-3">Måned</th>
+                  <th className="text-right p-2 sm:p-3">Økter</th>
+                  <th className="text-right p-2 sm:p-3">Km løp</th>
+                  <th className="text-right p-2 sm:p-3">Løpstid</th>
+                  <th className="text-right p-2 sm:p-3">Styrkevolum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(byMonth.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([mk, v]) => (
+                  <tr key={mk} className="border-b last:border-b-0">
+                    <td className="p-2 sm:p-3">{mk}</td>
+                    <td className="p-2 sm:p-3 text-right">{v.count}</td>
+                    <td className="p-2 sm:p-3 text-right">{v.km.toFixed(1)}</td>
+                    <td className="p-2 sm:p-3 text-right">{formatDuration(v.sec)}</td>
+                    <td className="p-2 sm:p-3 text-right">{Math.round(v.volume).toLocaleString('no-NO')} kg</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {Array.from(byMonth.entries())
-                    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-                    .map(([mk, v]) => (
-                      <tr key={mk} className="border-b last:border-b-0">
-                        <td className="p-3">{mk}</td>
-                        <td className="p-3 text-right">{v.count}</td>
-                        <td className="p-3 text-right">{v.km.toFixed(1)}</td>
-                        <td className="p-3 text-right">{formatDuration(v.sec)}</td>
-                        <td className="p-3 text-right">{Math.round(v.volume).toLocaleString('no-NO')} kg</td>
-                      </tr>
-                    ))}
-                  {byMonth.size === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-3 text-center text-muted-foreground">
-                        Ingen data i valgt periode.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+                {byMonth.size === 0 && <tr><td colSpan={5} className="p-3 text-center text-muted-foreground">Ingen data i valgt periode.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </CardContent></Card>
       </section>
 
-      {/* Recent workouts preview */}
+      {/* Recent workouts */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Siste økter</h2>
         <div className="space-y-3">
-          {filtered.slice(0, 10).map((w) => (
+          {filtered.slice(0, 10).map(w => (
             <Card key={w.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{w.title}</CardTitle>
-              </CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm sm:text-base">{w.title}</CardTitle></CardHeader>
               <CardContent className="pt-0 text-sm">
                 <div className="flex flex-wrap gap-2 items-center">
-                  <span className="text-muted-foreground">
-                    {w.created_at ? new Date(w.created_at).toLocaleDateString('no-NO') : ''}
-                  </span>
+                  <span className="text-muted-foreground">{w.created_at ? new Date(w.created_at).toLocaleDateString('no-NO') : ''}</span>
                   <span className="px-2 py-0.5 rounded-full bg-muted text-xs">{w.type}</span>
                 </div>
-                {w.type === 'løping' && (
-                  <p className="mt-2">
-                    {w.distance ?? 0} km • {w.zone != null ? `Sone ${w.zone} • ` : ''}Tid {w.total_time ?? '-'}
-                  </p>
-                )}
+                {w.type === 'løping' && <p className="mt-2">{w.distance ?? 0} km • {w.zone != null ? `Sone ${w.zone} • ` : ''}Tid {w.total_time ?? '-'}</p>}
                 {w.type === 'styrke' && w.strength_exercises && (
-                  <ul className="mt-2 list-disc pl-5 space-y-1">
-                    {w.strength_exercises.map((ex, i) => (
-                      <li key={i}>
-                        {ex.exercise} ({ex.category}): {ex.sets} × {ex.reps} @ {ex.weight}kg • RPE {ex.rpe}
-                      </li>
-                    ))}
-                  </ul>
+                  <ul className="mt-2 list-disc pl-5 space-y-1">{w.strength_exercises.map((ex, i) => (
+                    <li key={i}>{ex.exercise} ({ex.category}): {ex.sets} × {ex.reps} @ {ex.weight}kg • RPE {ex.rpe}</li>
+                  ))}</ul>
                 )}
                 {w.type === 'annet' && w.description ? <p className="mt-2">{w.description}</p> : null}
               </CardContent>
             </Card>
           ))}
-          {filtered.length === 0 && (
-            <Card>
-              <CardContent className="p-4 text-sm text-muted-foreground">
-                Ingen økter å vise i valgt periode.
-              </CardContent>
-            </Card>
-          )}
+          {filtered.length === 0 && <Card><CardContent className="p-4 text-sm text-muted-foreground">Ingen økter å vise i valgt periode.</CardContent></Card>}
         </div>
       </section>
     </div>
@@ -424,9 +346,5 @@ export default function StatsPage() {
 }
 
 function RangeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <Button variant={active ? 'default' : 'secondary'} size="sm" onClick={onClick} className="rounded-full">
-      {children}
-    </Button>
-  )
+  return <Button variant={active ? 'default' : 'secondary'} size="sm" onClick={onClick} className="rounded-full">{children}</Button>
 }

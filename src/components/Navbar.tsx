@@ -4,11 +4,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js'
-import dynamic from 'next/dynamic'
 import Login from './Login'
-
-// importer SearchUsers uten SSR
-const SearchUsers = dynamic(() => import('@/components/SearchUsers'), { ssr: false })
 
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null)
@@ -29,9 +25,7 @@ export default function Navbar() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event: AuthChangeEvent, session: Session | null) => {
-        if (mounted) {
-          setUser(session?.user ?? null)
-        }
+        if (mounted) setUser(session?.user ?? null)
       }
     )
 
@@ -56,9 +50,9 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="bg-gray-900 text-white shadow px-6 py-3 flex justify-between items-center gap-4">
+    <nav className="bg-gray-900 text-white shadow px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3">
       {/* Venstre side */}
-      <div className="flex gap-6 items-center">
+      <div className="flex gap-4 items-center mr-auto">
         <Link href="/" className="font-bold text-lg">TankArmy</Link>
         {user && (
           <>
@@ -68,41 +62,38 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* Midt – universelt søk */}
-      <div className="flex-1 max-w-md">
-        <SearchUsers placeholder="Søk etter brukere…" limit={8} />
-      </div>
-
       {/* Høyre side */}
-      {checking ? (
-        <div className="h-8 w-28 rounded bg-gray-800 animate-pulse" />
-      ) : user ? (
-        <div className="flex gap-3 items-center">
-          <Link href="/profile" className="hover:underline text-sm" prefetch>
-            Min profil
-          </Link>
-          <Link href="/settings" className="hover:underline text-sm" prefetch>
-            Innstillinger
-          </Link>
-          <Link
-            href="/workouts/new"
-            className="bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-sm"
-          >
-            ➕ Ny økt
-          </Link>
-          <span className="text-sm hidden sm:inline">Hei, {user.email}</span>
-          <button
-            onClick={handleLogout}
-            disabled={loading}
-            className="bg-red-600 hover:bg-red-700 disabled:opacity-60 rounded px-3 py-1 text-sm"
-          >
-            {loading ? 'Logger ut…' : 'Logg ut'}
-          </button>
-          {error && <span className="ml-2 text-xs text-red-400">{error}</span>}
-        </div>
-      ) : (
-        <Login />
-      )}
+      <div className="ml-auto flex gap-3 items-center flex-wrap">
+        {checking ? (
+          <div className="h-8 w-28 rounded bg-gray-800 animate-pulse" />
+        ) : user ? (
+          <>
+            <Link href="/profile" className="hover:underline text-sm" prefetch>
+              Min profil
+            </Link>
+            <Link href="/settings" className="hover:underline text-sm" prefetch>
+              Innstillinger
+            </Link>
+            <Link
+              href="/workouts/new"
+              className="bg-green-600 hover:bg-green-700 rounded px-3 py-1 text-sm"
+            >
+              ➕ Ny økt
+            </Link>
+            <span className="text-sm hidden sm:inline">Hei, {user.email}</span>
+            <button
+              onClick={handleLogout}
+              disabled={loading}
+              className="bg-red-600 hover:bg-red-700 disabled:opacity-60 rounded px-3 py-1 text-sm"
+            >
+              {loading ? 'Logger ut…' : 'Logg ut'}
+            </button>
+            {error && <span className="ml-2 text-xs text-red-400">{error}</span>}
+          </>
+        ) : (
+          <Login />
+        )}
+      </div>
     </nav>
   )
 }
