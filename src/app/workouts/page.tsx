@@ -8,11 +8,10 @@ import { Button } from '@/components/ui/button'
 // Types
 type StrengthExercise = {
   exercise: string
-  category: string
   sets: number
   reps: number
   weight: number
-  rpe: number
+  rpe?: number
 }
 
 type Workout = {
@@ -46,15 +45,15 @@ export default function WorkoutsPage() {
 
   // Løping (flere økter)
   const [runningSessions, setRunningSessions] = useState<
-    { distance: number; total_time: string; zone: number }[]
-  >([{ distance: 0, total_time: '', zone: 0 }])
+    { distance: number; total_time: string; zone?: number }[]
+  >([{ distance: 0, total_time: '', zone: undefined }])
 
   // Annet
   const [description, setDescription] = useState('')
 
   // Styrke
   const [strengthExercises, setStrengthExercises] = useState<StrengthExercise[]>([
-    { exercise: '', category: '', sets: 0, reps: 0, weight: 0, rpe: 0 },
+    { exercise: '', sets: 0, reps: 0, weight: 0, rpe: undefined },
   ])
 
   const [loading, setLoading] = useState(false)
@@ -135,7 +134,7 @@ export default function WorkoutsPage() {
 
       if (type === 'løping') {
         newWorkouts = runningSessions
-          .filter((run) => run.distance > 0 && run.total_time.trim() !== '' && run.zone > 0)
+          .filter((run) => run.distance > 0 && run.total_time.trim() !== '')
           .map((run) => ({
             title: title.trim(),
             user_id: user.id,
@@ -173,8 +172,8 @@ export default function WorkoutsPage() {
         // Nullstill felter
         setTitle('')
         setDescription('')
-        setStrengthExercises([{ exercise: '', category: '', sets: 0, reps: 0, weight: 0, rpe: 0 }])
-        setRunningSessions([{ distance: 0, total_time: '', zone: 0 }])
+        setStrengthExercises([{ exercise: '', sets: 0, reps: 0, weight: 0, rpe: undefined }])
+        setRunningSessions([{ distance: 0, total_time: '', zone: undefined }])
         setType('løping')
       }
     } catch (err) {
@@ -207,8 +206,8 @@ export default function WorkoutsPage() {
       const current = { ...next[index] }
 
       if (numericFields.has(field)) {
-        const num = value === '' ? 0 : Number(value)
-        ;(current as any)[field] = Number.isFinite(num) ? num : 0
+        const num = value === '' ? undefined : Number(value)
+        ;(current as any)[field] = Number.isFinite(num as number) ? num : undefined
       } else {
         ;(current as any)[field] = String(value)
       }
@@ -221,7 +220,7 @@ export default function WorkoutsPage() {
   const addStrengthField = () => {
     setStrengthExercises((prev) => [
       ...prev,
-      { exercise: '', category: '', sets: 0, reps: 0, weight: 0, rpe: 0 },
+      { exercise: '', sets: 0, reps: 0, weight: 0, rpe: undefined },
     ])
   }
 
@@ -238,8 +237,10 @@ export default function WorkoutsPage() {
     setRunningSessions((prev) => {
       const next = [...prev]
       const current = { ...next[index] }
-      if (field === 'distance' || field === 'zone') {
+      if (field === 'distance') {
         current[field] = value === '' ? 0 : Number(value)
+      } else if (field === 'zone') {
+        current[field] = value === '' ? undefined : Number(value)
       } else {
         current[field] = value
       }
@@ -249,7 +250,7 @@ export default function WorkoutsPage() {
   }
 
   const addRunField = () => {
-    setRunningSessions((prev) => [...prev, { distance: 0, total_time: '', zone: 0 }])
+    setRunningSessions((prev) => [...prev, { distance: 0, total_time: '', zone: undefined }])
   }
 
   const removeRunField = (index: number) => {
@@ -264,15 +265,13 @@ export default function WorkoutsPage() {
       <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-2">
         {/* Navn */}
         <input
-  type="time"
-  step={1}
-  pattern="\d{2}:\d{2}:\d{2}"
-  placeholder="hh:mm:ss"
-  className="border px-3 py-2 rounded w-full"
-  value={run.total_time}
-  onChange={(e) => handleRunChange(i, 'total_time', e.target.value)}
-  required
-/>
+          type="text"
+          placeholder="Navn på økt"
+          className="border px-3 py-2 rounded w-full"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
 
         {/* Type */}
         <select
@@ -303,6 +302,8 @@ export default function WorkoutsPage() {
 
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="\d{1,2}:\d{2}:\d{2}"
                   placeholder="Tid (hh:mm:ss)"
                   className="border px-3 py-2 rounded w-full"
                   value={run.total_time}
@@ -311,12 +312,11 @@ export default function WorkoutsPage() {
                 />
 
                 <select
-                  value={run.zone === 0 ? '' : run.zone}
+                  value={run.zone ?? ''}
                   onChange={(e) => handleRunChange(i, 'zone', e.target.value)}
                   className="border px-3 py-2 rounded"
-                  required
                 >
-                  <option value="">Velg sone</option>
+                  <option value="">Sone</option>
                   {[1, 2, 3, 4, 5].map((z) => (
                     <option key={z} value={z}>
                       Sone {z}
@@ -360,47 +360,38 @@ export default function WorkoutsPage() {
                   onChange={(e) => handleStrengthChange(i, 'exercise', e.target.value)}
                 />
 
-                <input
-                  type="text"
-                  placeholder="Kategori (f.eks. benk, mark, knebøy)"
-                  className="border px-3 py-2 rounded w-full"
-                  value={ex.category}
-                  onChange={(e) => handleStrengthChange(i, 'category', e.target.value)}
-                />
-
                 <div className="flex gap-2">
                   <input
                     type="number"
                     placeholder="Sett"
-                    className="border px-3 py-2 rounded w-1/3"
+                    className="border px-3 py-2 rounded w-1/4"
                     value={ex.sets === 0 ? '' : ex.sets}
                     onChange={(e) => handleStrengthChange(i, 'sets', e.target.value)}
                   />
                   <input
                     type="number"
                     placeholder="Reps"
-                    className="border px-3 py-2 rounded w-1/3"
+                    className="border px-3 py-2 rounded w-1/4"
                     value={ex.reps === 0 ? '' : ex.reps}
                     onChange={(e) => handleStrengthChange(i, 'reps', e.target.value)}
                   />
                   <input
                     type="number"
                     placeholder="Vekt (kg)"
-                    className="border px-3 py-2 rounded w-1/3"
+                    className="border px-3 py-2 rounded w-1/4"
                     value={ex.weight === 0 ? '' : ex.weight}
                     onChange={(e) => handleStrengthChange(i, 'weight', e.target.value)}
                   />
+                  <input
+                    type="number"
+                    placeholder="RPE (1-10, valgfritt)"
+                    min={1}
+                    max={10}
+                    className="border px-3 py-2 rounded w-1/4"
+                    value={ex.rpe ?? ''}
+                    onChange={(e) => handleStrengthChange(i, 'rpe', e.target.value)}
+                  />
                 </div>
-
-                <input
-                  type="number"
-                  placeholder="RPE (1-10)"
-                  min={1}
-                  max={10}
-                  className="border px-3 py-2 rounded w-full"
-                  value={ex.rpe === 0 ? '' : ex.rpe}
-                  onChange={(e) => handleStrengthChange(i, 'rpe', e.target.value)}
-                />
 
                 {strengthExercises.length > 1 && (
                   <button
@@ -476,7 +467,7 @@ export default function WorkoutsPage() {
                     <p><strong>Total tid:</strong> {w.total_time ? formatTimeVerbose(String(w.total_time)) : '-'}</p>
                     {speed && <p><strong>Snittfart:</strong> {speed} km/t</p>}
                     {pace && <p><strong>Pace:</strong> {pace}</p>}
-                    <p><strong>Sone:</strong> {w.zone ?? '-'}</p>
+                    {w.zone ? <p><strong>Sone:</strong> {w.zone}</p> : null}
                   </div>
                 )}
 
@@ -486,7 +477,8 @@ export default function WorkoutsPage() {
                     <ul className="list-disc list-inside">
                       {w.strength_exercises.map((ex, i) => (
                         <li key={i}>
-                          <strong>{ex.exercise}</strong> ({ex.category || 'Ukjent'}) – {ex.sets} x {ex.reps} – {ex.weight} kg – RPE {ex.rpe}
+                          <strong>{ex.exercise}</strong> – {ex.sets} x {ex.reps} – {ex.weight} kg
+                          {ex.rpe ? ` – RPE ${ex.rpe}` : ''}
                         </li>
                       ))}
                     </ul>
